@@ -2,14 +2,16 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Hóa Đơn Quét QR</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Hóa Đơn</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #f5f5f5;
+      margin: 0;
       padding: 20px;
+      color: #333;
     }
+
     .invoice-container {
       background: #fff;
       width: 80mm;
@@ -18,17 +20,35 @@
       box-shadow: 0 0 8px rgba(0,0,0,0.15);
       border-radius: 8px;
     }
+
+    h2, h3 {
+      text-align: center;
+      margin: 5px 0;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
     }
+
     th, td {
       padding: 6px;
       font-size: 14px;
     }
-    th { background: #ddd; }
-    tr:nth-child(even) { background: #f9f9f9; }
+
+    th {
+      background: #ddd;
+    }
+
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+    .input-row td {
+      vertical-align: middle;
+    }
+
     input[type="text"], input[type="number"] {
       width: 100%;
       padding: 4px;
@@ -36,6 +56,7 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
+
     .delete-btn {
       background: #ff4d4d;
       color: white;
@@ -44,6 +65,11 @@
       padding: 4px 8px;
       cursor: pointer;
     }
+
+    .delete-btn:hover {
+      background: #d93636;
+    }
+
     .btn {
       margin-top: 10px;
       padding: 6px 12px;
@@ -53,23 +79,72 @@
       color: white;
       cursor: pointer;
     }
-    .total { font-weight: bold; text-align: right; margin-top: 10px; }
-    .footer { text-align: center; font-size: 12px; margin-top: 20px; }
-    .no-print { margin-top: 20px; text-align: center; }
-    @media print { .no-print { display: none; } }
+
+    .btn:hover {
+      background-color: #222;
+    }
+
+    .total {
+      font-weight: bold;
+      text-align: right;
+      margin-top: 10px;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+
+    .no-print {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    @media print {
+      .no-print {
+        display: none;
+      }
+      body {
+        background: white;
+      }
+    }
   </style>
 </head>
 <body>
 
 <div class="no-print">
-  <h3>📷 Quét mã QR sản phẩm</h3>
-  <div id="qr-reader" style="width: 300px; margin: auto;"></div>
+  <h3>📝 Nhập thông tin hóa đơn</h3>
+  <label>Họ tên khách hàng: <input type="text" id="customerName" placeholder="Nguyễn Văn A"></label><br><br>
+
+  <table id="inputTable">
+    <thead>
+      <tr>
+        <th>Sản phẩm</th>
+        <th>Số </th>
+        <th>Đơn giá</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="input-row">
+        <td><input type="text" placeholder="Tên sản phẩm"></td>
+        <td><input type="number" placeholder="1" min="1"></td>
+        <td><input type="number" placeholder="0" min="0"></td>
+        <td><button class="delete-btn" onclick="deleteRow(this)">❌</button></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button class="btn" onclick="addRow()">+ Thêm dòng</button>
+  <button class="btn" onclick="generateInvoice()">Tạo hóa đơn</button>
 </div>
 
-<div class="invoice-container" id="invoice">
-  <h2>☕ Cửa Hàng Bé Code</h2>
-  <h3>HÓA ĐƠN</h3>
-  <p><strong>Ngày giờ:</strong> <span id="dateTime"></span></p>
+<div class="invoice-container" id="invoice" style="display:none;">
+  <h2>☕ Cửa Hàng  Nhật Tân </h2>
+  <h3>HÓA ĐƠN THANH TOÁN</h3>
+  <p><strong>Khách hàng:</strong> <span id="nameDisplay"></span><br>
+     <strong>Ngày giờ:</strong> <span id="dateTime"></span></p>
 
   <table id="invoiceTable">
     <thead>
@@ -78,14 +153,17 @@
         <th>SL</th>
         <th>Đơn giá</th>
         <th>Thành tiền</th>
-        <th></th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 
   <p class="total">Tổng cộng: <span id="totalAmount"></span>đ</p>
-  <div class="footer">Cảm ơn quý khách! Hotline: 0909.123.456</div>
+
+  <div class="footer">
+    Cảm ơn quý khách!<br>
+    Hotline: 0559.123*###
+  </div>
 </div>
 
 <div class="no-print">
@@ -93,83 +171,63 @@
 </div>
 
 <script>
-  const invoiceBody = document.querySelector("#invoiceTable tbody");
-  const totalAmountEl = document.getElementById("totalAmount");
-  const dateTimeEl = document.getElementById("dateTime");
-  const productMap = {}; // key: productName|price, value: row index
-
-  function updateTotal() {
-    let total = 0;
-    invoiceBody.querySelectorAll("tr").forEach(tr => {
-      const qty = parseInt(tr.cells[1].innerText) || 0;
-      const price = parseInt(tr.cells[2].innerText) || 0;
-      total += qty * price;
-      tr.cells[3].innerText = (qty * price).toLocaleString() + "đ";
-    });
-    totalAmountEl.innerText = total.toLocaleString();
+  function addRow() {
+    const tableBody = document.querySelector("#inputTable tbody");
+    const row = document.createElement("tr");
+    row.classList.add("input-row");
+    row.innerHTML = `
+      <td><input type="text" placeholder="Tên sản phẩm"></td>
+      <td><input type="number" placeholder="1" min="1"></td>
+      <td><input type="number" placeholder="0" min="0"></td>
+      <td><button class="delete-btn" onclick="deleteRow(this)">❌</button></td>
+    `;
+    tableBody.appendChild(row);
   }
 
-  function addOrUpdateProduct(productName, price) {
-    const key = `${productName}|${price}`;
-    if (productMap[key] != null) {
-      const tr = invoiceBody.children[productMap[key]];
-      const currentQty = parseInt(tr.cells[1].innerText);
-      tr.cells[1].innerText = currentQty + 1;
-    } else {
-      const rowIndex = invoiceBody.children.length;
-      productMap[key] = rowIndex;
+  function deleteRow(btn) {
+    const row = btn.closest("tr");
+    row.remove();
+  }
+
+  function generateInvoice() {
+    const invoice = document.getElementById("invoice");
+    const tbody = document.querySelector("#invoiceTable tbody");
+    const name = document.getElementById("customerName").value || "Khách không tên";
+    const now = new Date();
+    const dateStr = now.toLocaleString('vi-VN');
+
+    tbody.innerHTML = "";
+    let total = 0;
+
+    const rows = document.querySelectorAll("#inputTable tbody tr");
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll("input");
+      const productName = inputs[0].value.trim();
+      const qty = parseInt(inputs[1].value) || 0;
+      const price = parseInt(inputs[2].value) || 0;
+
+      if (!productName || qty <= 0 || price < 0) return;
+
+      const amount = qty * price;
+      total += amount;
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${productName}</td>
-        <td>1</td>
-        <td>${price}</td>
+        <td>${qty}</td>
         <td>${price.toLocaleString()}đ</td>
-        <td><button class="delete-btn" onclick="deleteRow(this, '${key}')">❌</button></td>
+        <td>${amount.toLocaleString()}đ</td>
       `;
-      invoiceBody.appendChild(tr);
-    }
-    updateTotal();
-  }
-
-  function deleteRow(btn, key) {
-    const row = btn.closest("tr");
-    row.remove();
-    delete productMap[key];
-    // Re-index
-    Array.from(invoiceBody.children).forEach((row, i) => {
-      const k = row.cells[0].innerText + '|' + row.cells[2].innerText;
-      productMap[k] = i;
+      tbody.appendChild(tr);
     });
-    updateTotal();
+
+    document.getElementById("nameDisplay").innerText = name;
+    document.getElementById("dateTime").innerText = dateStr;
+    document.getElementById("totalAmount").innerText = total.toLocaleString();
+
+    invoice.style.display = "block";
+    window.scrollTo(0, document.body.scrollHeight);
   }
-
-  // Show current datetime
-  const now = new Date();
-  dateTimeEl.innerText = now.toLocaleString('vi-VN');
-
-  // QR SCANNER
-  function onScanSuccess(decodedText) {
-    const [name, priceStr] = decodedText.split("|");
-    const price = parseInt(priceStr);
-    if (name && price) {
-      addOrUpdateProduct(name.trim(), price);
-    }
-  }
-
-  const html5QrCode = new Html5Qrcode("qr-reader");
-  Html5Qrcode.getCameras().then(cameras => {
-    if (cameras && cameras.length) {
-      html5QrCode.start(
-        cameras[0].id,
-        { fps: 10, qrbox: 250 },
-        onScanSuccess
-      );
-    } else {
-      alert("Không tìm thấy camera.");
-    }
-  }).catch(err => {
-    console.error("Camera error:", err);
-  });
 </script>
 
 </body>
