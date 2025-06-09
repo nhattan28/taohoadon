@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Hóa Đơn Quét QR</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .invoice-container {
+      background: #fff;
+      width: 80mm;
+      margin: auto;
+      padding: 20px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.15);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 6px;
+      font-size: 14px;
+    }
+    th { background: #ddd; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 4px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .delete-btn {
+      background: #ff4d4d;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .btn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      background-color: #444;
+      color: white;
+      cursor: pointer;
+    }
+    .total { font-weight: bold; text-align: right; margin-top: 10px; }
+    .footer { text-align: center; font-size: 12px; margin-top: 20px; }
+    .no-print { margin-top: 20px; text-align: center; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+
+<div class="no-print">
+  <h3>📷 Quét mã QR sản phẩm</h3>
+  <div id="qr-reader" style="width: 300px; margin: auto;"></div>
+</div>
+
+<div class="invoice-container" id="invoice">
+  <h2>☕ Cửa Hàng Bé Code</h2>
+  <h3>HÓA ĐƠN</h3>
+  <p><strong>Ngày giờ:</strong> <span id="dateTime"></span></p>
+
+  <table id="invoiceTable">
+    <thead>
+      <tr>
+        <th>Sản phẩm</th>
+        <th>SL</th>
+        <th>Đơn giá</th>
+        <th>Thành tiền</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="total">Tổng cộng: <span id="totalAmount"></span>đ</p>
+  <div class="footer">Cảm ơn quý khách! Hotline: 0909.123.456</div>
+</div>
+
+<div class="no-print">
+  <button class="btn" onclick="window.print()">🖨️ In hóa đơn</button>
+</div>
+
+<script>
+  const invoiceBody = document.querySelector("#invoiceTable tbody");
+  const totalAmountEl = document.getElementById("totalAmount");
+  const dateTimeEl = document.getElementById("dateTime");
+  const productMap = {}; // key: productName|price, value: row index
+
+  function updateTotal() {
+    let total = 0;
+    invoiceBody.querySelectorAll("tr").forEach(tr => {
+      const qty = parseInt(tr.cells[1].innerText) || 0;
+      const price = parseInt(tr.cells[2].innerText) || 0;
+      total += qty * price;
+      tr.cells[3].innerText = (qty * price).toLocaleString() + "đ";
+    });
+    totalAmountEl.innerText = total.toLocaleString();
+  }
+
+  function addOrUpdateProduct(productName, price) {
+    const key = `${productName}|${price}`;
+    if (productMap[key] != null) {
+      const tr = invoiceBody.children[productMap[key]];
+      const currentQty = parseInt(tr.cells[1].innerText);
+      tr.cells[1].innerText = currentQty + 1;
+    } else {
+      const rowIndex = invoiceBody.children.length;
+      productMap[key] = rowIndex;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${productName}</td>
+        <td>1</td>
+        <td>${price}</td>
+        <td>${price.toLocaleString()}đ</td>
+        <td><button class="delete-btn" onclick="deleteRow(this, '${key}')">❌</button></td>
+      `;
+      invoiceBody.appendChild(tr);
+    }
+    updateTotal();
+  }
+
+  function deleteRow(btn, key) {
+    const row = btn.closest("tr");
+    row.remove();
+    delete productMap[key];
+    // Re-index
+    Array.from(invoiceBody.children).forEach((row, i) => {
+      const k = row.cells[0].innerText + '|' + row.cells[2].innerText;
+      productMap[k] = i;
+    });
+    updateTotal();
+  }
+
+  // Show current datetime
+  const now = new Date();
+  dateTimeEl.innerText = now.toLocaleString('vi-VN');
+
+  // QR SCANNER
+  function onScanSuccess(decodedText) {
+    const [name, priceStr] = decodedText.split("|");
+    const price = parseInt(priceStr);
+    if (name && price) {
+      addOrUpdateProduct(name.trim(), price);
+    }
+  }
+
+  const html5QrCode = new Html5Qrcode("qr-reader");
+  Html5Qrcode.getCameras().then(cameras => {
+    if (cameras && cameras.length) {
+      html5QrCode.start(
+        cameras[0].id,
+        { fps: 10, qrbox: 250 },
+        onScanSuccess
+      );
+    } else {
+      alert("Không tìm thấy camera.");
+    }
+  }).catch(err => {
+    console.error("Camera error:", err);
+  });
+</script>
+
+</body>
+</html>
